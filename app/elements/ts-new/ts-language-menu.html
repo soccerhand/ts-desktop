@@ -19,12 +19,6 @@
             align-items: center;
         }
 
-        [icon="search"] {
-            padding: 5px;
-            height: 38px;
-            width: 38px;
-        }
-
         #header {
             color: var(--greyed-out-dark);
             font-size: 110%;
@@ -71,7 +65,11 @@
             float: right;
             color: var(--greyed-out-dark);
             font-style: italic;
-            font-size: 70%
+            font-size: 80%
+        }
+
+        .row:hover .right {
+            color: white;
         }
 
         input {
@@ -147,13 +145,22 @@
       searchfilter: function (query, languagelist) {
           let search = App.util.startsWithBase.bind(null, query);
 
-          return languagelist.filter(function (lang) {
-              return search(lang.ln) || search(lang.lc);
+          var bycode = languagelist.filter(function (lang) {
+              return search(lang.lc);
+          });
+          var byname = languagelist.filter(function (lang) {
+              return search(lang.ln);
+          });
+          var combined = bycode.concat(byname);
+
+          return combined.filter(function(item, index) {
+              return combined.indexOf(item) === index;
           });
       },
 
       store: function (e) {
           this.language = e.model.lang;
+          this.query = "";
           this.selected = this.selected + 1;
       },
 

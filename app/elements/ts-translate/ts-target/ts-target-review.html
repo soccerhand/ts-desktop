@@ -78,6 +78,7 @@
 
         #button {
             text-align: center;
+            text-transform: uppercase;
         }
 
         #heading paper-icon-button {
@@ -111,6 +112,11 @@
         #popup .buttons {
             display: flex;
             justify-content: center;
+            color: var(--greyed-out-dark);
+        }
+
+        .buttons paper-button:hover {
+            color: var(--highlight-primary);
         }
 
 	</style>
@@ -128,7 +134,7 @@
                 <p id="textholder"></p>
             </div>
             <div id="button">
-                <paper-button raised on-tap="checkdone"><iron-icon icon="done"></iron-icon>DONE</paper-button>
+                <paper-button raised on-tap="checkdone"><iron-icon icon="done"></iron-icon>Done</paper-button>
             </div>
         </paper-material>
 
@@ -196,6 +202,7 @@
             var textstr2 = "\<\/span\> ";
             var numstr1 = "\<sup\>";
             var numstr2 = "\<\/sup\>";
+            var toggle = this.$.toggle;
             var returnstr = "";
             var verse = 0;
             var i = 0;
@@ -207,6 +214,8 @@
                 for (i = 0; i < textarray.length; i++) {
                     returnstr += textstr1 + textarray[i] + textstr2;
                 }
+                toggle.classList.remove("done");
+                toggle.classList.add("notdone");
             } else {
                 for (i = 0; i < textarray.length; i++) {
                     if (textarray[i].substring(0, 2) === "/v") {
@@ -216,13 +225,14 @@
                         returnstr += textarray[i] + " ";
                     }
                 }
+                toggle.classList.remove("notdone");
+                toggle.classList.add("done");
             }
 
             textholder.innerHTML = returnstr;
         },
 
         completechunk: function () {
-            var toggle = this.$.toggle;
             var textholder = this.$.textholder;
             var children = textholder.children;
             var type = "";
@@ -242,20 +252,18 @@
                 }
             }
 
-            this.chunk.transcontent = returnstr;
-            toggle.classList.remove("notdone");
-            toggle.classList.add("done");
-            this.chunk.status = "Complete";
+            this.set('chunk.transcontent', returnstr);
+            this.set('chunk.status', "Complete");
             this.fire('edittrigger');
         },
 
         checkdone: function () {
-            var toggle = this.$.toggle;
             var popup = this.$.popup;
             var textarray = this.chunk.transcontent.split(" ");
+            var status = this.chunk.status;
             var returnstr = "";
 
-            if (toggle.classList.contains("notdone")) {
+            if (status === "Incomplete") {
                 popup.open();
             } else {
                 for (var i = 0; i < textarray.length; i++) {
@@ -264,10 +272,8 @@
                     }
                 }
 
-                this.chunk.transcontent = returnstr;
-                toggle.classList.remove("done");
-                toggle.classList.add("notdone");
-                this.chunk.status = "Incomplete";
+                this.set('chunk.transcontent', returnstr);
+                this.set('chunk.status', "Incomplete");
                 this.fire('edittrigger');
             }
         },

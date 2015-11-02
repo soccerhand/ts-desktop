@@ -6,13 +6,45 @@
     <style>
 
         :host {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
             display: flex;
-            flex: auto;
         }
 
         #contain {
             flex: auto;
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-bottom: 100px;
+        }
+
+        :host(.preview) {
+            opacity: 0;
+        }
+
+        :host(.hide) {
+            visibility: hidden;
+        }
+
+        .movein {
+            -webkit-animation: moveinto .5s;
+        }
+
+        .moveout {
+            -webkit-animation: moveout .5s;
+        }
+
+        @-webkit-keyframes moveinto {
+            0% {transform: scale(0,0); opacity: 0}
+            100% {transform: scale(1,1); opacity: 1}
+        }
+
+        @-webkit-keyframes moveout {
+            0% {transform: scale(1,1); opacity: 1}
+            100% {transform: scale(0,0); opacity: 0}
         }
 
     </style>
@@ -20,13 +52,8 @@
     <template>
 
         <div id="contain">
-            <template is="dom-if" if="{{combined.data.length}}">
-                <template is="dom-repeat" items="{{combined.data}}" as="chunk">
-                    <ts-read-card project="[[project]]" chunk="[[chunk]]" sources="{{sources}}" selected-source="{{selectedSource}}"></ts-read-card>
-                </template>
-            </template>
-            <template is="dom-if" if="{{!combined.data.length}}">
-                <ts-read-card sources="{{sources}}" selected-source="{{selectedSource}}"></ts-read-card>
+            <template is="dom-repeat" items="{{chapters.data}}" as="chunk">
+                <ts-read-card id="{{createid(index)}}" project="{{project}}" chunk="[[chunk]]"></ts-read-card>
             </template>
         </div>
 
@@ -44,82 +71,87 @@
             Polymer.IronResizableBehavior
         ],
 
-        listeners: {
-            'iron-resize': 'onResize'
-        },
-
         properties: {
-            sources: {
-                type: Array,
-                notify: true
-            },
-            selectedSource: {
-                type: Number,
-                notify: true
-            },
-            source: {
-                type: Array,
-                value: []
-            },
-            translation: {
-                type: Array,
-                value: []
-            },
             project: {
+                type: Object,
+                value: {},
+                notify: true
+            },
+            chapters: {
                 type: Object,
                 value: {}
             },
-            combined: {
+            modestatus: {
                 type: Object,
                 value: {},
-                computed: 'combinedata(source.*, translation.*)'
+                notify: true
+            },
+            modename: {
+                type: String,
+                value: "read"
             }
         },
 
-        combinedata: function () {
+        frommode: function () {
+            var mythis = this;
+            var contain = this.$.contain;
+            var num = contain.children.length - 1;
+            var card;
+            var found = false;
+            var i = 0;
 
-            var transdata = {};
-            var srcdata = {};
-            var transchapters = [];
-            var srcchapters = [];
+            contain.classList.add("moveout");
+            setTimeout(function() {
+                contain.classList.remove("moveout");
+                mythis.classList.add("hide");
+            }, 500);
+            while (i < num && !found) {
+                card = document.getElementById(mythis.modename + i);
+                if (card.getBoundingClientRect().top > 0 - (card.getBoundingClientRect().height / 2) ) {
+                    mythis.set('modestatus.chapter', card.chunk.chapter);
+                    mythis.set('modestatus.verse', 1);
+                    found = true;
+                }
+                i++;
+            }
+        },
 
-            _.forEach(_.groupBy(this.translation, function(chunks) {
-                return chunks.meta.chapter;
-            }), function (data, chap) {
-                var chapstatus = "Complete";
-                var chapcontent = "";
+        tomode: function () {
+            var mythis = this;
+            var contain = this.$.contain;
+            var num = contain.children.length - 1;
+            var card;
+            var pagescroll;
+            var cardscroll;
+            var found = false;
+            var i = 0;
 
-                _.forEach(data, function (chunk) {
-                    if (chunk.status === "Incomplete") {
-                        chapstatus = "Incomplete";
-                    }
-                    chapcontent += chunk.content + " ";
-                });
-                transchapters.push({status: chapstatus, transcontent: chapcontent});
-            });
+            mythis.classList.add("preview");
+            mythis.classList.remove("hide");
+            pagescroll = contain.scrollTop;
+            while (i < num && !found) {
+                card = document.getElementById(mythis.modename + i);
+                if (card.chunk.chapter === mythis.modestatus.chapter) {
+                    cardscroll = card.getBoundingClientRect().top;
+                    found = true;
+                }
+                i++;
+            }
+            contain.scrollTop = pagescroll + cardscroll - 60;
+            setTimeout(function() {
+                mythis.classList.remove("preview");
+                contain.classList.add("movein");
+                setTimeout(function() {
+                    contain.classList.remove("movein");
+                }, 500);
+            }, 500);
+        },
 
-            _.forEach(_.groupBy(this.source, function(chunks) {
-                return chunks.meta.chapter;
-            }), function (data, chap) {
-                var chapcontent = "";
-
-                _.forEach(data, function (chunk) {
-                    chapcontent += chunk.content + " ";
-                });
-                srcchapters.push({chapter: chap, srccontent: chapcontent});
-            });
-
-            transdata.data = transchapters;
-            srcdata.data = srcchapters;
-
-            return _.merge(srcdata, transdata);
+        createid: function (index) {
+            return this.modename + index;
         },
 
         ready: function() {
-
-        },
-
-        onResize: function() {
 
         }
 
