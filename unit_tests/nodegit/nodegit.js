@@ -10,7 +10,6 @@
     let Git = require("nodegit");
 
     let repoPath = './unit_tests/nodegit/repo/';
-    let repoPath2 = './unit_tests/nodegit/repo2/';
     let testFileDir = './unit_tests/nodegit/files/';
     //let repoUrl = "https://github.com/soccerhand/teset";
     let repoUrlSsh = "git@github.com:soccerhand/teset.git";
@@ -31,52 +30,22 @@
         before(function (done) {
             let config;
             rimraf(repoPath, function () {
-                rimraf(repoPath2, function () {
-                    Git.Config.openDefault()
-                        .then(function(configResult) {
-                            config = configResult;
-                            return config.setString("user.name", "soccerhand");
-                        }).then(function() {
-                            return config.setString("user.email", "soccerhand@gmail.com");
-                        }).then(function() {
-                            done();
-                        });
-                });
+                Git.Config.openDefault()
+                    .then(function(configResult) {
+                        config = configResult;
+                        return config.setString("user.name", "soccerhand");
+                    }).then(function() {
+                        return config.setString("user.email", "soccerhand@gmail.com");
+                    }).then(function() {
+                        done();
+                    });
             });
         });
-/*
+
         after(function (done) {
             rimraf(repoPath, function () {
-                rimraf(repoPath2, function () {
-                    done();
-                });
+                done();
             });
-        });
-*/
-
-        describe('@InitializeRepo', function () {
-            let success = false;
-
-            before(function (done) {
-                let isBare = 0;
-                Git.Repository.init(repoPath2, isBare)
-                .then(function (repo) {
-                    success = true;
-                    done();
-                })
-                .catch(function (err) {
-                    success = false;
-                    done(err);
-                });
-            });
-
-            it('should create .git directory', function () {
-                assert(success);
-
-                let stats = fs.statSync(repoPath2 + '/.git/');
-                assert(stats.isDirectory());
-            });
-
         });
 
 
@@ -141,6 +110,7 @@
                     .then(getMostRecentCommit)
                     .then(getCommitMessage)
                     .then(function(msg) {
+                        console.log("latest commit: " + msg);
                         success = true;
                         message = msg;
                         done();
@@ -152,8 +122,6 @@
 
             it('should read latest commit', function () {
                 assert(success);
-                console.log("latest commit: " + message);
-                //assert.equal('test\n', message);
             });
 
         });
@@ -163,57 +131,61 @@
             let fileName = 'hello.txt'
 
             before(function (done) {
+                let repo, index, oid;
                 Git.Repository.open(repoPath)
-                .then(function(repo) {
-                    let index, oid;
+                    .then(function(repoResult) {
+                        repo = repoResult;
 
-                    // Write new file to repo directory
-                    fs.createReadStream(path.join(testFileDir, fileName)).pipe(fs.createWriteStream(path.join(repo.workdir(), fileName)));
+                        // Write new file to repo directory
+                        fs.createReadStream(path.join(testFileDir, fileName)).pipe(fs.createWriteStream(path.join(repo.workdir(), fileName)));
 
-                    repo.openIndex()
-                    .then(function(indexResult) {
+                        return repo.openIndex();
+                    }).then(function(indexResult) {
                       index = indexResult;
                       return index.read(1);
-                    })
-                    .then(function() {
-                      // this file is in the root of the directory and doesn't need a full path
-                      return index.addByPath(fileName);
-                    })
-                    .then(function() {
-                      // this file is in a subdirectory and can use a relative path
-                      return index.addByPath(fileName);
-                    })
-                    .then(function() {
+                    }).then(function() {
+                      // can use a relative path if using addByPath
+                      return index.addAll();
+                    }).then(function() {
+                      return index.updateAll();
+                    }).then(function() {
                       // this will write the file to the index
                       return index.write();
-                    })
-                    .then(function() {
+                    }).then(function() {
                       return index.writeTree();
-                    })
-                    .then(function(oidResult) {
+                    }).then(function(oidResult) {
                       oid = oidResult;
                       return Git.Reference.nameToId(repo, "HEAD");
-                    })
-                    .then(function(head) {
+                    }).then(function(head) {
                       return repo.getCommit(head);
-                    })
-                    .then(function(parent) {
-                      var author = Git.Signature.now("Nathan", "soccerhand@gmail.com");
-                      var committer = Git.Signature.now("Nathan", "soccerhand@github.com");
+                    }).then(function(parent) {
+                      var author = Git.Signature.now("soccerhand", "soccerhand@gmail.com");
+                      var committer = Git.Signature.now("soccerhand", "soccerhand@github.com");
 
                       return repo.createCommit("HEAD", author, committer, "unit testing", oid, [parent]);
-                    })
-                    .done(function(commitId) {
-                      //console.log("New Commit: ", commitId);
-                      success = true;
-                      done();
+                    }).then(function(commitId) {
+                      console.log("New Commit: ", commitId);
+
+                        let commit = Git.Commit.lookup(repo, commitId)
+                            .then(function (commit) {
+                                return commit.getDiff()
+                            }).then(function(arrayDiff) {
+                                arrayDiff.forEach(function(diff) {
+                                    let deltas = diff.numDeltas();
+                                    console.log('diff, deltas: ' + deltas);
+                                    if (deltas > 0) {
+                                        console.log(diff.getDelta(0).newFile().path());
+                                    }
+                                });
+                                success = true;
+                                done();
+                            });
+
+
+                    }).catch(function (err) {
+                        success = false;
+                        done(err);
                     });
-
-
-                }).catch(function (err) {
-                    success = false;
-                    done(err);
-                });
             });
 
             it('should add a file', function () {
@@ -225,6 +197,7 @@
 
         });
 
+/*
         describe('@Push', function () {
             this.timeout(15000);
 
@@ -237,8 +210,7 @@
                     .then(function(repoResult) {
                         repo = repoResult;
                         return repoResult.openIndex();
-                    })
-                    .then(function() {
+                    }).then(function() {
                         return repo.getRemote("origin");
                     }).then(function(remoteResult) {
                       console.log('remote Loaded');
@@ -265,8 +237,7 @@
                       console.log('remote Pushed!')
                       success = true;
                       done();
-                    })
-                    .catch(function(err) {
+                    }).catch(function(err) {
                         success = false;
                         done(err);
                     })
@@ -278,6 +249,7 @@
 
         });
 
+*/
 
         describe('@ReadConfig', function () {
             let value;
