@@ -31,12 +31,31 @@
          * Clones a remote repository into the specified local path
          * @param remoteUrl the remote URL of the repository to clone
          * @param path the local path to clone the repository into
+         * @param keys struct containing publicKeyPath and privateKeyPath
          * @returns Promise the repository object
          */
-        clone: function (remoteUrl, path) {
+        clone: function (remoteUrl, path, keys) {
             let repo;
 
-            return null;
+            let opts = {
+                fetchOpts: {
+                    callbacks: {
+                        certificateCheck: function () {
+                            return 1;
+                        },
+                        credentials: function (url, userName) {
+                            return Git.Cred.sshKeyNew(
+                                userName,
+                                keys.publicKeyPath,
+                                keys.privateKeyPath,
+                                ""
+                            );
+                        }
+                    }
+                }
+            };
+
+            return Git.Clone(remoteUrl, path, opts);
         },
 
         /**
@@ -44,7 +63,7 @@
          * @param path the path to the local repository
          * @param username username of the author
          * @param email email address of the author
-         * @returns boolean true if the changes were successfully added and committed
+         * @returns Promise the Oid of the commit
          */
         stage: function (path, username, email) {
             let repo, index, oid;
@@ -75,19 +94,11 @@
                 .then(function(oidResult) {
                     oid = oidResult;
 
-                    return Git.Reference.lookup(repo, "HEAD");
+                    return repo.getHeadCommit();
                 })
-                .then(function (ref) {
-                    let target = ref.target();
-                    if (target === undefined) {
-                        return [];
-                    }
-                    else {
-                        return [repo.getCommit(target)];
-                    }
+                .then(function(head) {
+                    let parents = head !== null ? [head] : [];
 
-                })
-                .then(function(parents) {
                     let author = Git.Signature.now(username, email);
                     let committer = Git.Signature.now(username, email);
 
@@ -100,21 +111,75 @@
         },
 
         /**
-         * Pushes all pending commits in the specified local repository to the configured remote
+         * Fetches latest commits from the origin and merges into local branch
          * @param path the path to the local repository
-         * @returns boolean true if the push was successful
+         * @param keys struct containing publicKeyPath and privateKeyPath
+         * @returns Promise a commit id for a succesful merge or an index for a merge with conflicts
          */
-        push: function (path) {
-            return false;
+        pull: function (path, keys) {
+            let repo;
+
+            return Git.Repository.open(path)
+                .then(function(repoResult) {
+                    repo = repoResult;
+
+                    let opts = {
+                        callbacks: {
+                            certificateCheck: function () {
+                                return 1;
+                            },
+                            credentials: function (url, userName) {
+                                return Git.Cred.sshKeyNew(
+                                    userName,
+                                    keys.publicKeyPath,
+                                    keys.privateKeyPath,
+                                    ""
+                                );
+                            }
+                        }
+                    };
+
+                    return repo.fetch("origin", opts);
+                })
+                .then(function (number) {
+                    return repo.mergeBranches("master", "origin/master");
+                });
         },
 
         /**
-         * Reverts all new/changed/deleted files in the specififed repository
+         * Pushes all pending commits in the specified local repository to the origin
          * @param path the path to the local repository
-         * @returns boolean true if the changes were successfully reverted
+         * @param keys struct containing publicKeyPath and privateKeyPath
+         * @returns Promise numeric error code
          */
-        discard: function (path) {
-            return false;
+        push: function (path, keys) {
+            let repo;
+
+            return Git.Repository.open(path)
+                .then(function(repoResult) {
+                    repo = repoResult;
+                    return repo.openIndex();
+                }).then(function() {
+                    return repo.getRemote("origin");
+                }).then(function(remote) {
+                    let opts = {
+                        callbacks: {
+                            certificateCheck: function () {
+                                return 1;
+                            },
+                            credentials: function (url, userName) {
+                                return Git.Cred.sshKeyNew(
+                                    userName,
+                                    keys.publicKeyPath,
+                                    keys.privateKeyPath,
+                                    ""
+                                );
+                            }
+                        }
+                    };
+
+                    return remote.push(["refs/heads/master:refs/heads/master"], opts);
+                });
         }
 
     };
@@ -122,6 +187,6 @@
     exports.init = gitInterface.init;
     exports.clone = gitInterface.clone;
     exports.stage = gitInterface.stage;
+    exports.pull = gitInterface.pull;
     exports.push = gitInterface.push;
-    exports.discard = gitInterface.discard;
 })();
